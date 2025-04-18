@@ -1,0 +1,85 @@
+import socket
+import threading
+import tkinter as tk
+from tkinter import simpledialog, scrolledtext, messagebox
+
+class ChatClient:
+    def __init__(self, host='192.168.210.184', port=12347):
+        self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.client.connect((host, port))
+
+        self.root = tk.Tk()
+        self.root.title("Network Chat App")
+        self.root.geometry("400x500")
+
+        # Chat area
+        self.chat_area = scrolledtext.ScrolledText(self.root, wrap=tk.WORD, state='disabled', bg="#f0f0f0")
+        self.chat_area.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
+
+        # Message entry
+        self.message_entry = tk.Entry(self.root)
+        self.message_entry.pack(padx=10, pady=(0, 10), fill=tk.X, side=tk.LEFT, expand=True)
+        self.message_entry.bind("<Return>", self.send_message)
+
+        # Send button
+        self.send_button = tk.Button(self.root, text="Send", command=self.send_message)
+        self.send_button.pack(padx=10, pady=(0, 10), side=tk.RIGHT)
+
+        # Username input
+        self.username = simpledialog.askstring("Username", "Enter your username:", parent=self.root)
+        if not self.username:
+            self.root.destroy()
+            return
+
+        self.client.send(self.username.encode())
+
+        # Start thread for receiving messages
+        threading.Thread(target=self.receive_messages, daemon=True).start()
+
+        # Set protocol for closing the window
+        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+        self.root.mainloop()
+
+    def send_message(self, event=None):
+        message = self.message_entry.get()
+        if message:
+            if message.lower() == 'exit':
+                self.client.send(message.encode())
+                self.root.destroy()
+                return
+            
+            # Display the sent message in the chat area immediately
+            self.chat_area.config(state='normal')
+            self.chat_area.insert(tk.END, f"You: {message}\n")
+            self.chat_area.yview(tk.END)
+            self.chat_area.config(state='disabled')
+            
+            # Send the message to the server
+            self.client.send(message.encode())
+            self.message_entry.delete(0, tk.END)
+
+    def receive_messages(self):
+        while True:
+            try:
+                message = self.client.recv(1024).decode()
+                if not message:
+                    break
+                # Display the received message in the chat area
+                self.chat_area.config(state='normal')
+                self.chat_area.insert(tk.END, message + "\n")
+                self.chat_area.yview(tk.END)
+                self.chat_area.config(state='disabled')
+            except:
+                messagebox.showerror("Connection Error", "Disconnected from server.")
+                break
+
+    def on_close(self):
+        try:
+            self.client.send("exit".encode())
+        except:
+            pass
+        self.root.destroy()
+
+
+if __name__ == "__main__":
+    ChatClient()
