@@ -1,0 +1,62 @@
+import socket
+import threading
+
+clients = {}  # Dictionary to hold client sockets and usernames
+
+# Function to broadcast messages to all connected clients except the sender
+def broadcast(message, sender_socket):
+    for client in list(clients.keys()):
+        if client != sender_socket:
+            try:
+                client.send(message.encode())
+            except:
+                print(f"Client {clients[client]} disconnected.")
+                client.close()
+                del clients[client]
+
+# Function to handle each connected client
+def handle(client, address):
+    try:
+        client.send("Enter your username: ".encode())
+        username = client.recv(1024).decode()
+        clients[client] = username
+        print(f"{username} has joined the chat from {address}")
+
+        broadcast(f"{username} has joined the chat!", client)
+
+        while True:
+            message = client.recv(1024).decode()
+            if not message:
+                break
+            if message.lower() == 'exit':
+                print(f"{username} left the chat.")
+                broadcast(f"{username} has left the chat.", client)
+                break
+
+            formatted_message = f"{username}: {message}"
+            print(formatted_message)
+            broadcast(formatted_message, client)
+
+    except ConnectionResetError:
+        print(f"{clients.get(client, 'Unknown user')} disconnected unexpectedly.")
+
+    finally:
+        if client in clients:
+            del clients[client]
+        client.close()
+
+# Main server setup
+def start_server(host='0.0.0.0', port=12347):
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind((host, port))
+    server.listen()
+    print(f"Server started on {host}:{port} and waiting for connections...")
+
+    while True:
+        client, address = server.accept()
+        print(f"New connection from {address}")
+        thread = threading.Thread(target=handle, args=(client, address))
+        thread.start()
+
+if __name__ == "__main__":
+    start_server()
